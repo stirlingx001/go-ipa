@@ -23,12 +23,12 @@ const (
 // MSMPrecomp is an engine to calculate 256-MSM on a fixed basis using precomputed tables.
 // This precomputed tables design are biased to support an efficient MSM for Verkle Trees.
 //
-// Their design involves 16-bit windows for the first window16vs8IndexLimit points, and 8-bit
-// windows for the rest. The motivation for this is that the first points are used to calculate
+// Their design involves 16-bit Windows for the first window16vs8IndexLimit points, and 8-bit
+// Windows for the rest. The motivation for this is that the first points are used to calculate
 // tree keys, which clients heavily rely on compared to "longer" MSMs. This provides a significant
 // boost to tree-key generation without exploding table sizes.
 type MSMPrecomp struct {
-	precompPoints [supportedMSMLength]PrecompPoint
+	PrecompPoints [supportedMSMLength]PrecompPoint
 }
 
 // NewPrecompMSM creates a new MSMPrecomp.
@@ -54,7 +54,7 @@ func NewPrecompMSM(points []Element) (MSMPrecomp, error) {
 	}
 
 	return MSMPrecomp{
-		precompPoints: precompPoints,
+		PrecompPoints: precompPoints,
 	}, nil
 }
 
@@ -65,7 +65,7 @@ func (msm *MSMPrecomp) MSM(scalars []fr.Element) Element {
 
 	for i := range scalars {
 		if !scalars[i].IsZero() {
-			msm.precompPoints[i].ScalarMul(scalars[i], &result)
+			msm.PrecompPoints[i].ScalarMul(scalars[i], &result)
 		}
 	}
 	return Element{inner: bandersnatch.PointProj{
@@ -77,8 +77,8 @@ func (msm *MSMPrecomp) MSM(scalars []fr.Element) Element {
 
 // PrecompPoint is a precomputed table for a single point.
 type PrecompPoint struct {
-	windowSize int
-	windows    [][]bandersnatch.PointExtendedNormalized
+	WindowSize int
+	Windows    [][]bandersnatch.PointExtendedNormalized
 }
 
 // NewPrecompPoint creates a new PrecompPoint for the given point and window size.
@@ -91,14 +91,14 @@ func NewPrecompPoint(point Element, windowSize int) (PrecompPoint, error) {
 	specialWindow.SetUint64(1 << windowSize)
 
 	res := PrecompPoint{
-		windowSize: windowSize,
-		windows:    make([][]bandersnatch.PointExtendedNormalized, 256/windowSize),
+		WindowSize: windowSize,
+		Windows:    make([][]bandersnatch.PointExtendedNormalized, 256/windowSize),
 	}
 
 	windows := make([][]bandersnatch.PointExtended, 256/windowSize)
 	group, _ := errgroup.WithContext(context.Background())
 	group.SetLimit(runtime.NumCPU())
-	for i := 0; i < len(res.windows); i++ {
+	for i := 0; i < len(res.Windows); i++ {
 		i := i
 		base := bandersnatch.PointExtendedFromProj(&point.inner)
 		group.Go(func() error {
@@ -108,7 +108,7 @@ func NewPrecompPoint(point Element, windowSize int) (PrecompPoint, error) {
 				windows[i][j] = curr
 				curr.Add(&curr, &base)
 			}
-			res.windows[i] = batchToExtendedPointNormalized(windows[i])
+			res.Windows[i] = batchToExtendedPointNormalized(windows[i])
 			return nil
 		})
 		point.ScalarMul(&point, &specialWindow)
@@ -119,31 +119,31 @@ func NewPrecompPoint(point Element, windowSize int) (PrecompPoint, error) {
 }
 
 // ScalarMul multiplies the point by the given scalar using the precomputed points.
-// It applies a trick to push a carry between windows since our precomputed tables
+// It applies a trick to push a carry between Windows since our precomputed tables
 // avoid storing point inverses.
 func (pp *PrecompPoint) ScalarMul(scalar fr.Element, res *bandersnatch.PointExtended) {
-	numWindowsInLimb := 64 / pp.windowSize
+	numWindowsInLimb := 64 / pp.WindowSize
 
 	scalar.FromMont()
 	var carry uint64
 	var pNeg bandersnatch.PointExtendedNormalized
 	for l := 0; l < fr.Limbs; l++ {
 		for w := 0; w < numWindowsInLimb; w++ {
-			windowValue := (scalar[l]>>(pp.windowSize*w))&((1<<pp.windowSize)-1) + carry
+			windowValue := (scalar[l]>>(pp.WindowSize*w))&((1<<pp.WindowSize)-1) + carry
 			if windowValue == 0 {
 				continue
 			}
 			carry = 0
 
-			if windowValue > 1<<(pp.windowSize-1) {
-				windowValue = (1 << pp.windowSize) - windowValue
+			if windowValue > 1<<(pp.WindowSize-1) {
+				windowValue = (1 << pp.WindowSize) - windowValue
 				if windowValue != 0 {
-					pNeg.Neg(&pp.windows[l*numWindowsInLimb+w][windowValue-1])
+					pNeg.Neg(&pp.Windows[l*numWindowsInLimb+w][windowValue-1])
 					bandersnatch.ExtendedAddNormalized(res, res, &pNeg)
 				}
 				carry = 1
 			} else {
-				bandersnatch.ExtendedAddNormalized(res, res, &pp.windows[l*numWindowsInLimb+w][windowValue-1])
+				bandersnatch.ExtendedAddNormalized(res, res, &pp.Windows[l*numWindowsInLimb+w][windowValue-1])
 			}
 		}
 	}
