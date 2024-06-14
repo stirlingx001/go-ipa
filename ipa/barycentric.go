@@ -16,9 +16,9 @@ const domainSize = common.VectorLength
 // usage of the Barycentric formula.
 type PrecomputedWeights struct {
 	// This stores A'(x_i) and 1/A'(x_i)
-	barycentricWeights []fr.Element
+	BarycentricWeights []fr.Element
 	// This stores 1/k and -1/k for k \in [0, 255]
-	invertedDomain []fr.Element
+	InvertedDomain []fr.Element
 }
 
 // NewPrecomputedWeights generates the precomputed weights for the barycentric formula.
@@ -60,8 +60,8 @@ func NewPrecomputedWeights() *PrecomputedWeights {
 	}
 
 	return &PrecomputedWeights{
-		barycentricWeights: barycentricWeights,
-		invertedDomain:     invertedDomain,
+		BarycentricWeights: barycentricWeights,
+		InvertedDomain:     invertedDomain,
 	}
 
 }
@@ -106,7 +106,7 @@ func (preComp *PrecomputedWeights) ComputeBarycentricCoefficients(point fr.Eleme
 	// Compute A'(x_i) * (point - x_i)
 	lagrangeEvals := make([]fr.Element, domainSize)
 	for i := uint64(0); i < domainSize; i++ {
-		weight := preComp.barycentricWeights[i]
+		weight := preComp.BarycentricWeights[i]
 
 		var i_fr fr.Element
 		i_fr.SetUint64(i)
@@ -163,18 +163,18 @@ func (preComp *PrecomputedWeights) getInvertedElement(element int, is_neg bool) 
 	index := element - 1
 
 	if is_neg {
-		midpoint := len(preComp.invertedDomain) / 2
+		midpoint := len(preComp.InvertedDomain) / 2
 		index += midpoint
 	}
 
-	return preComp.invertedDomain[index]
+	return preComp.InvertedDomain[index]
 }
 
 func (preComp *PrecomputedWeights) getRatioOfWeights(numerator int, denominator int) fr.Element {
 
-	a := preComp.barycentricWeights[numerator]
-	midpoint := len(preComp.barycentricWeights) / 2
-	b := preComp.barycentricWeights[denominator+midpoint]
+	a := preComp.BarycentricWeights[numerator]
+	midpoint := len(preComp.BarycentricWeights) / 2
+	b := preComp.BarycentricWeights[denominator+midpoint]
 
 	var result fr.Element
 	result.Mul(&a, &b)
@@ -183,8 +183,8 @@ func (preComp *PrecomputedWeights) getRatioOfWeights(numerator int, denominator 
 
 func (preComp *PrecomputedWeights) getInverseBarycentricWeight(i int) fr.Element {
 
-	midpoint := len(preComp.barycentricWeights) / 2
-	return preComp.barycentricWeights[i+midpoint]
+	midpoint := len(preComp.BarycentricWeights) / 2
+	return preComp.BarycentricWeights[i+midpoint]
 }
 
 // Returns the absolute value and true if
