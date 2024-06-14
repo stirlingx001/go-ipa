@@ -40,6 +40,11 @@ type Element struct {
 	inner bandersnatch.PointProj
 }
 
+// Inner returns inner point
+func (p Element) Inner() *bandersnatch.PointProj {
+	return &p.inner
+}
+
 // Bytes returns the compressed serialized version of the element.
 func (p Element) Bytes() [CompressedSize]byte {
 	// Serialisation takes the x co-ordinate and multiplies it by the sign of y.
