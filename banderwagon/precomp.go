@@ -68,7 +68,7 @@ func (msm *MSMPrecomp) MSM(scalars []fr.Element) Element {
 			msm.PrecompPoints[i].ScalarMul(scalars[i], &result)
 		}
 	}
-	return Element{inner: bandersnatch.PointProj{
+	return Element{Inner: bandersnatch.PointProj{
 		X: result.X,
 		Y: result.Y,
 		Z: result.Z,
@@ -100,7 +100,7 @@ func NewPrecompPoint(point Element, windowSize int) (PrecompPoint, error) {
 	group.SetLimit(runtime.NumCPU())
 	for i := 0; i < len(res.Windows); i++ {
 		i := i
-		base := bandersnatch.PointExtendedFromProj(&point.inner)
+		base := bandersnatch.PointExtendedFromProj(&point.Inner)
 		group.Go(func() error {
 			windows[i] = make([]bandersnatch.PointExtended, 1<<(windowSize-1))
 			curr := base

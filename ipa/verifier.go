@@ -3,9 +3,11 @@ package ipa
 import (
 	"fmt"
 
+	gnarkbandersnatch "github.com/consensys/gnark-crypto/ecc/bls12-381/bandersnatch"
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
 	"github.com/crate-crypto/go-ipa/banderwagon"
 	"github.com/crate-crypto/go-ipa/common"
+	"math/big"
 )
 
 // CheckIPAProof verifies an IPA proof for a committed polynomial in evaluation form.
@@ -29,13 +31,21 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 
 	w := transcript.ChallengeScalar(labelW)
 
+	//fmt.Printf("w: %v\n", w.ToBigIntRegular(new(big.Int)))
+
+	//PrinfPoint("ic.Q", ic.Q.Inner())
+
 	// Rescaling of q.
 	var q banderwagon.Element
 	q.ScalarMul(&ic.Q, &w)
 
+	//PrinfPoint("q", q.Inner())
+
 	var qy banderwagon.Element
 	qy.ScalarMul(&q, &result)
 	commitment.Add(&commitment, &qy)
+
+	//PrinfPoint("commit", commitment.Inner())
 
 	challenges := generateChallenges(transcript, &proof)
 	challengesInv := fr.BatchInvert(challenges)
@@ -47,11 +57,18 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 		L := proof.L[i]
 		R := proof.R[i]
 
+		//fmt.Printf("x: %v\n", x.ToBigIntRegular(new(big.Int)))
+		//fmt.Printf("x: %v\n",  challengesInv[i].ToBigIntRegular(new(big.Int)))
+
 		commitment, err = commit([]banderwagon.Element{commitment, L, R}, []fr.Element{fr.One(), x, challengesInv[i]})
 		if err != nil {
 			return false, fmt.Errorf("could not compute commitment+x*L+x^-1*R: %w", err)
 		}
+
+		//PrinfPoint("commitment", commitment.Inner())
 	}
+
+	//PrinfPoint("commitment", commitment.Inner())
 
 	g := ic.SRS
 
@@ -71,15 +88,24 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 	if err != nil {
 		return false, fmt.Errorf("could not compute g0: %w", err)
 	}
+
 	b0, err := InnerProd(b, foldingScalars)
 	if err != nil {
 		return false, fmt.Errorf("could not compute b0: %w", err)
 	}
 
+	//fmt.Printf("b0: %v\n", b0.ToBigIntRegular(new(big.Int)))
+
 	var got banderwagon.Element
 	//  g0 * a + (a * b) * Q;
 	var part_1 banderwagon.Element
+
+	//PrinfPoint("g0", &g0.Inner)
+	//fmt.Printf("A_scalar: %v\n", proof.A_scalar.ToBigIntRegular(new(big.Int)))
+
 	part_1.ScalarMul(&g0, &proof.A_scalar)
+
+	//PrinfPoint("part_1", &part_1.Inner)
 
 	var part_2 banderwagon.Element
 	var part_2a fr.Element
@@ -88,6 +114,8 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 	part_2.ScalarMul(&q, &part_2a)
 
 	got.Add(&part_1, &part_2)
+
+	//PrinfPoint("got", got.Inner())
 
 	return got.Equal(&commitment), nil
 }
@@ -101,4 +129,11 @@ func generateChallenges(transcript *common.Transcript, proof *IPAProof) []fr.Ele
 		challenges[i] = transcript.ChallengeScalar(labelX)
 	}
 	return challenges
+}
+
+func PrinfPoint(str string, p *gnarkbandersnatch.PointProj) {
+	var commitmentAffine gnarkbandersnatch.PointAffine
+	commitmentAffine.FromProj(p)
+	fmt.Printf("%v: x: %v\n", str, commitmentAffine.X.BigInt(new(big.Int)))
+	fmt.Printf("%v: y: %v\n", str, commitmentAffine.Y.BigInt(new(big.Int)))
 }

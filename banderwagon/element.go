@@ -22,14 +22,14 @@ const (
 type Fr = fr.Element
 
 // Generator is the generator of the group.
-var Generator = Element{inner: bandersnatch.PointProj{
+var Generator = Element{Inner: bandersnatch.PointProj{
 	X: bandersnatch.CurveParams.Base.X,
 	Y: bandersnatch.CurveParams.Base.Y,
 	Z: fp.One(),
 }}
 
 // Identity is the identity element of the group.
-var Identity = Element{inner: bandersnatch.PointProj{
+var Identity = Element{Inner: bandersnatch.PointProj{
 	X: fp.Zero(),
 	Y: fp.One(),
 	Z: fp.One(),
@@ -37,30 +37,28 @@ var Identity = Element{inner: bandersnatch.PointProj{
 
 // Element is an element of the group.
 type Element struct {
-	inner bandersnatch.PointProj
-}
-
-// Inner returns inner point
-func (p Element) Inner() *bandersnatch.PointProj {
-	return &p.inner
+	Inner bandersnatch.PointProj
 }
 
 // Bytes returns the compressed serialized version of the element.
 func (p Element) Bytes() [CompressedSize]byte {
 	// Serialisation takes the x co-ordinate and multiplies it by the sign of y.
-	affineX := p.inner.X
-	affineY := p.inner.Y
-	if !p.inner.Z.IsOne() {
+	affineX := p.Inner.X
+	affineY := p.Inner.Y
+	if !p.Inner.Z.IsOne() {
 		// Convert underlying point to affine representation.
 		var affine bandersnatch.PointAffine
-		affine.FromProj(&p.inner)
+		affine.FromProj(&p.Inner)
 		affineX = affine.X
 		affineY = affine.Y
+		//fmt.Printf(" affine.Y: %v\n",affineY.BigInt(big.NewInt(0)))
 	}
 
 	if !affineY.LexicographicallyLargest() {
 		affineX.Neg(&affineX)
 	}
+
+	//fmt.Printf("affineX: %v\n",affineX.BigInt(big.NewInt(0)))
 	return affineX.Bytes()
 }
 
@@ -70,7 +68,7 @@ func (p Element) Bytes() [CompressedSize]byte {
 func (p Element) BytesUncompressedTrusted() [UncompressedSize]byte {
 	// Convert underlying point to affine representation
 	var affine bandersnatch.PointAffine
-	affine.FromProj(&p.inner)
+	affine.FromProj(&p.Inner)
 
 	xbytes := affine.X.Bytes()
 	ybytes := affine.Y.Bytes()
@@ -101,11 +99,11 @@ func BatchNormalize(elements []*Element) error {
 	// batch invert all points[].Z coordinates with Montgomery batch inversion trick
 	// (stores points[].Z^-1 in result[i].X to avoid allocating a slice of fr.Elements)
 	for i := 0; i < len(dedupedElements); i++ {
-		if dedupedElements[i].inner.Z.IsZero() {
+		if dedupedElements[i].Inner.Z.IsZero() {
 			return errors.New("can not normalize point at infinity")
 		}
 		invs[i] = accumulator
-		accumulator.Mul(&accumulator, &dedupedElements[i].inner.Z)
+		accumulator.Mul(&accumulator, &dedupedElements[i].Inner.Z)
 	}
 
 	var accInverse fp.Element
@@ -113,15 +111,15 @@ func BatchNormalize(elements []*Element) error {
 
 	for i := len(dedupedElements) - 1; i >= 0; i-- {
 		invs[i].Mul(&invs[i], &accInverse)
-		accInverse.Mul(&accInverse, &dedupedElements[i].inner.Z)
+		accInverse.Mul(&accInverse, &dedupedElements[i].Inner.Z)
 	}
 
 	// batch convert to affine.
 	parallel.Execute(len(dedupedElements), func(start, end int) {
 		for i := start; i < end; i++ {
-			dedupedElements[i].inner.X.Mul(&dedupedElements[i].inner.X, &invs[i])
-			dedupedElements[i].inner.Y.Mul(&dedupedElements[i].inner.Y, &invs[i])
-			dedupedElements[i].inner.Z = fp.One()
+			dedupedElements[i].Inner.X.Mul(&dedupedElements[i].Inner.X, &invs[i])
+			dedupedElements[i].Inner.Y.Mul(&dedupedElements[i].Inner.Y, &invs[i])
+			dedupedElements[i].Inner.Z = fp.One()
 		}
 	})
 	return nil
@@ -132,7 +130,7 @@ func ElementsToBytes(elements ...*Element) [][CompressedSize]byte {
 	// Collect all z co-ordinates
 	zs := make([]fp.Element, len(elements))
 	for i := 0; i < len(elements); i++ {
-		zs[i] = elements[i].inner.Z
+		zs[i] = elements[i].Inner.Z
 	}
 
 	// Invert z co-ordinates
@@ -147,8 +145,8 @@ func ElementsToBytes(elements ...*Element) [][CompressedSize]byte {
 
 		element := elements[i]
 
-		X.Mul(&element.inner.X, &zInvs[i])
-		Y.Mul(&element.inner.Y, &zInvs[i])
+		X.Mul(&element.Inner.X, &zInvs[i])
+		Y.Mul(&element.Inner.Y, &zInvs[i])
 
 		// Serialisation takes the x co-ordinate and multiplies it by the sign of y
 		if !Y.LexicographicallyLargest() {
@@ -166,7 +164,7 @@ func BatchToBytesUncompressed(elements ...*Element) [][UncompressedSize]byte {
 	// Collect all z co-ordinates
 	zs := make([]fp.Element, len(elements))
 	for i := 0; i < len(elements); i++ {
-		zs[i] = elements[i].inner.Z
+		zs[i] = elements[i].Inner.Z
 	}
 
 	// Invert z co-ordinates
@@ -181,8 +179,8 @@ func BatchToBytesUncompressed(elements ...*Element) [][UncompressedSize]byte {
 
 		element := elements[i]
 
-		X.Mul(&element.inner.X, &zInvs[i])
-		Y.Mul(&element.inner.Y, &zInvs[i])
+		X.Mul(&element.Inner.X, &zInvs[i])
+		Y.Mul(&element.Inner.Y, &zInvs[i])
 
 		xbytes := X.Bytes()
 		ybytes := Y.Bytes()
@@ -218,7 +216,7 @@ func (p *Element) setBytes(buf []byte, trusted bool) error {
 	}
 
 	// We have a valid point, set it.
-	*p = Element{inner: bandersnatch.PointProj{
+	*p = Element{Inner: bandersnatch.PointProj{
 		X: point.X,
 		Y: point.Y,
 		Z: fp.One(),
@@ -272,7 +270,7 @@ func (p *Element) SetBytesUncompressed(buf []byte, trusted bool) error {
 		y.SetBytes(buf[coordinateSize:])
 	}
 
-	*p = Element{inner: bandersnatch.PointProj{
+	*p = Element{Inner: bandersnatch.PointProj{
 		X: x,
 		Y: y,
 		Z: fp.One(),
@@ -284,7 +282,7 @@ func (p *Element) SetBytesUncompressed(buf []byte, trusted bool) error {
 // computes X/Y
 func (p Element) mapToBaseField() fp.Element {
 	var res fp.Element
-	res.Div(&p.inner.X, &p.inner.Y)
+	res.Div(&p.Inner.X, &p.Inner.Y)
 	return res
 }
 
@@ -305,7 +303,7 @@ func BatchMapToScalarField(result []*fr.Element, elements []*Element) error {
 	// Collect all y co-ordinates
 	ys := make([]fp.Element, len(elements))
 	for i := 0; i < len(elements); i++ {
-		ys[i] = elements[i].inner.Y
+		ys[i] = elements[i].Inner.Y
 	}
 
 	// Invert y co-ordinates
@@ -315,7 +313,7 @@ func BatchMapToScalarField(result []*fr.Element, elements []*Element) error {
 	for i := 0; i < len(elements); i++ {
 		var mappedElement fp.Element
 
-		mappedElement.Mul(&elements[i].inner.X, &yInvs[i])
+		mappedElement.Mul(&elements[i].Inner.X, &yInvs[i])
 		byts := fp.BytesLE(mappedElement)
 		result[i].SetBytesLE(byts[:])
 	}
@@ -325,11 +323,11 @@ func BatchMapToScalarField(result []*fr.Element, elements []*Element) error {
 
 // Equal returns true if p and other represent the same point.
 func (p *Element) Equal(other *Element) bool {
-	x1 := p.inner.X
-	y1 := p.inner.Y
+	x1 := p.Inner.X
+	y1 := p.Inner.Y
 
-	x2 := other.inner.X
-	y2 := other.inner.Y
+	x2 := other.Inner.X
+	y2 := other.Inner.Y
 
 	if x1.IsZero() && y1.IsZero() {
 		return false
@@ -371,19 +369,19 @@ func (p *Element) SetIdentity() *Element {
 
 // Double sets p to 2*p1.
 func (p *Element) Double(p1 *Element) *Element {
-	p.inner.Double(&p1.inner)
+	p.Inner.Double(&p1.Inner)
 	return p
 }
 
 // Add sets p to p1+p2.
 func (p *Element) Add(p1, p2 *Element) *Element {
-	p.inner.Add(&p1.inner, &p2.inner)
+	p.Inner.Add(&p1.Inner, &p2.Inner)
 	return p
 }
 
 // AddMixed sets p to p1+p2, where p2 is in affine form.
 func (p *Element) AddMixed(p1 *Element, p2 bandersnatch.PointAffine) *Element {
-	p.inner.MixedAdd(&p1.inner, &p2)
+	p.Inner.MixedAdd(&p1.Inner, &p2)
 	return p
 }
 
@@ -399,38 +397,38 @@ func (p *Element) Sub(p1, p2 *Element) *Element {
 func (p *Element) IsOnCurve() bool {
 	// TODO: use projective curve equation to check
 	var point_aff bandersnatch.PointAffine
-	point_aff.FromProj(&p.inner)
+	point_aff.FromProj(&p.Inner)
 	return point_aff.IsOnCurve()
 }
 
 // Normalize returns a point in affine form.
 // If the point is at infinity, returns an error.
 func (p *Element) Normalize() error {
-	if p.inner.Z.IsZero() {
+	if p.Inner.Z.IsZero() {
 		return errors.New("can not normalize point at infinity")
 	}
 
 	var point_aff bandersnatch.PointAffine
-	point_aff.FromProj(&p.inner)
+	point_aff.FromProj(&p.Inner)
 
-	p.inner.X.Set(&point_aff.X)
-	p.inner.Y.Set(&point_aff.Y)
-	p.inner.Z.SetOne()
+	p.Inner.X.Set(&point_aff.X)
+	p.Inner.Y.Set(&point_aff.Y)
+	p.Inner.Z.SetOne()
 
 	return nil
 }
 
 // Set sets p to p1.
 func (p *Element) Set(p1 *Element) *Element {
-	p.inner.X.Set(&p1.inner.X)
-	p.inner.Y.Set(&p1.inner.Y)
-	p.inner.Z.Set(&p1.inner.Z)
+	p.Inner.X.Set(&p1.Inner.X)
+	p.Inner.Y.Set(&p1.Inner.Y)
+	p.Inner.Z.Set(&p1.Inner.Z)
 	return p
 }
 
 // Neg sets p to -p1.
 func (p *Element) Neg(p1 *Element) *Element {
-	p.inner.Neg(&p1.inner)
+	p.Inner.Neg(&p1.Inner)
 	return p
 }
 
@@ -438,6 +436,6 @@ func (p *Element) Neg(p1 *Element) *Element {
 func (p *Element) ScalarMul(p1 *Element, scalarMont *fr.Element) *Element {
 	var bigScalar big.Int
 	scalarMont.ToBigIntRegular(&bigScalar)
-	p.inner.ScalarMultiplication(&p1.inner, &bigScalar)
+	p.Inner.ScalarMultiplication(&p1.Inner, &bigScalar)
 	return p
 }

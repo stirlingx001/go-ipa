@@ -3,8 +3,10 @@ package banderwagon
 import (
 	"bytes"
 	"encoding/hex"
+	"math/big"
 	"testing"
 
+	fr2 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/crate-crypto/go-ipa/bandersnatch"
 	"github.com/crate-crypto/go-ipa/bandersnatch/fp"
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
@@ -68,7 +70,7 @@ func TestTwoTorsionEqual(t *testing.T) {
 	// Points that differ by a two torsion point
 	// are equal, where the two torsion point is not the point at infinity
 	two_torsion := Element{
-		inner: bandersnatch.PointProj{
+		Inner: bandersnatch.PointProj{
 			X: fp.Zero(),
 			Y: fp.MinusOne(),
 			Z: fp.One(),
@@ -161,7 +163,7 @@ func TestSerde(t *testing.T) {
 	var point_aff bandersnatch.PointAffine
 
 	point.Add(&Generator, &Generator)
-	point_aff.FromProj(&point.inner)
+	point_aff.FromProj(&point.Inner)
 
 	var buf bytes.Buffer
 
@@ -306,7 +308,7 @@ func TestBatchNormalize(t *testing.T) {
 
 		A.Add(&Generator, &Generator)
 		B = Element{
-			inner: bandersnatch.PointProj{
+			Inner: bandersnatch.PointProj{
 				X: fp.Zero(),
 				Y: fp.One(),
 				Z: fp.Zero(),
@@ -371,7 +373,7 @@ func TestSetUncompressedFail(t *testing.T) {
 		}
 		var serializedPoint [UncompressedSize]byte
 		xBytes := startX.Bytes()
-		yBytes := Generator.inner.Y.Bytes() // Use some valid-ish Y, but this shouldn't matter much.
+		yBytes := Generator.Inner.Y.Bytes() // Use some valid-ish Y, but this shouldn't matter much.
 		copy(serializedPoint[:], xBytes[:])
 		copy(serializedPoint[CompressedSize:], yBytes[:])
 
@@ -386,7 +388,7 @@ func TestSetUncompressedFail(t *testing.T) {
 		// Despite X would lead to a point in the curve,
 		// we modify Y+1 to check the provided (serialized) Y
 		// coordinate isn't trusted blindly.
-		gen.inner.Y.Add(&gen.inner.Y, &one)
+		gen.Inner.Y.Add(&gen.Inner.Y, &one)
 
 		pointBytes := gen.BytesUncompressedTrusted()
 		var point2 Element
@@ -413,6 +415,28 @@ func FuzzDeserializationCompressed(f *testing.F) {
 func FuzzDeserializationUncompressed(f *testing.F) {
 	f.Fuzz(func(t *testing.T, serializedpoint []byte) {
 		var point Element
+		point.IsOnCurve()
 		_ = point.SetBytes(serializedpoint)
 	})
+}
+
+func TestScalarMultiplication(t *testing.T) {
+	p1 := bandersnatch.PointProj{
+		X: [4]uint64{0, 0, 0, 0},
+		Y: [4]uint64{8589934590, 6378425256633387010, 11064306276430008309, 1739710354780652911},
+		Z: [4]uint64{8589934590, 6378425256633387010, 11064306276430008309, 1739710354780652911},
+	}
+
+	var p1Aff bandersnatch.PointAffine
+	p1Aff.FromProj(&p1)
+	t.Logf("p1 IsOnCurve: %v", p1Aff.IsOnCurve())
+
+	scalar, _ := new(big.Int).SetString("129642587988178282529040130059139592623", 10)
+
+	p2 := new(bandersnatch.PointProj).ScalarMultiplication(&p1, scalar)
+	var p2Aff bandersnatch.PointAffine
+	p2Aff.FromProj(p2)
+	t.Logf("p2 IsOnCurve: %v", p2Aff.IsOnCurve())
+
+	t.Logf("%v", scalar.Cmp(fr2.Modulus()))
 }
