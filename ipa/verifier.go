@@ -33,19 +33,19 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 
 	//fmt.Printf("w: %v\n", w.ToBigIntRegular(new(big.Int)))
 
-	//PrinfPoint("ic.Q", ic.Q.Inner())
+	//PrintPoint("ic.Q", ic.Q.Inner())
 
 	// Rescaling of q.
 	var q banderwagon.Element
 	q.ScalarMul(&ic.Q, &w)
 
-	//PrinfPoint("q", q.Inner())
+	//PrintPoint("q", q.Inner())
 
 	var qy banderwagon.Element
 	qy.ScalarMul(&q, &result)
 	commitment.Add(&commitment, &qy)
 
-	//PrinfPoint("commit", commitment.Inner())
+	//PrintPoint("commit", commitment.Inner())
 
 	challenges := generateChallenges(transcript, &proof)
 	challengesInv := fr.BatchInvert(challenges)
@@ -58,6 +58,7 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 		R := proof.R[i]
 
 		//fmt.Printf("x: %v\n", x.ToBigIntRegular(new(big.Int)))
+
 		//fmt.Printf("x: %v\n",  challengesInv[i].ToBigIntRegular(new(big.Int)))
 
 		commitment, err = commit([]banderwagon.Element{commitment, L, R}, []fr.Element{fr.One(), x, challengesInv[i]})
@@ -65,10 +66,10 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 			return false, fmt.Errorf("could not compute commitment+x*L+x^-1*R: %w", err)
 		}
 
-		//PrinfPoint("commitment", commitment.Inner())
+		//PrintPoint("commitment", &commitment.Inner)
 	}
 
-	//PrinfPoint("commitment", commitment.Inner())
+	//PrintPoint("commitment", commitment.Inner())
 
 	g := ic.SRS
 
@@ -76,7 +77,6 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 	foldingScalars := make([]fr.Element, len(g))
 	for i := 0; i < len(g); i++ {
 		scalar := fr.One()
-
 		for challengeIdx := 0; challengeIdx < len(challenges); challengeIdx++ {
 			if i&(1<<(7-challengeIdx)) > 0 {
 				scalar.Mul(&scalar, &challengesInv[challengeIdx])
@@ -100,12 +100,12 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 	//  g0 * a + (a * b) * Q;
 	var part_1 banderwagon.Element
 
-	//PrinfPoint("g0", &g0.Inner)
+	//PrintPoint("g0", &g0.Inner)
 	//fmt.Printf("A_scalar: %v\n", proof.A_scalar.ToBigIntRegular(new(big.Int)))
 
 	part_1.ScalarMul(&g0, &proof.A_scalar)
 
-	//PrinfPoint("part_1", &part_1.Inner)
+	//PrintPoint("part_1", &part_1.Inner)
 
 	var part_2 banderwagon.Element
 	var part_2a fr.Element
@@ -113,9 +113,13 @@ func CheckIPAProof(transcript *common.Transcript, ic *IPAConfig, commitment band
 	part_2a.Mul(&b0, &proof.A_scalar)
 	part_2.ScalarMul(&q, &part_2a)
 
+	//PrintPoint("part_2", &part_2.Inner)
+
 	got.Add(&part_1, &part_2)
 
-	//PrinfPoint("got", got.Inner())
+	//PrintPoint("got", &got.Inner)
+
+	//PrintPoint("commitment", &commitment.Inner)
 
 	return got.Equal(&commitment), nil
 }
@@ -131,9 +135,15 @@ func generateChallenges(transcript *common.Transcript, proof *IPAProof) []fr.Ele
 	return challenges
 }
 
-func PrinfPoint(str string, p *gnarkbandersnatch.PointProj) {
+func PrintPoint(str string, p *gnarkbandersnatch.PointProj) {
 	var commitmentAffine gnarkbandersnatch.PointAffine
 	commitmentAffine.FromProj(p)
 	fmt.Printf("%v: x: %v\n", str, commitmentAffine.X.BigInt(new(big.Int)))
 	fmt.Printf("%v: y: %v\n", str, commitmentAffine.Y.BigInt(new(big.Int)))
+}
+
+func PrintPointProj(str string, p *gnarkbandersnatch.PointProj) {
+	fmt.Printf("%v: x: %v\n", str, p.X.BigInt(new(big.Int)))
+	fmt.Printf("%v: y: %v\n", str, p.Y.BigInt(new(big.Int)))
+	fmt.Printf("%v: z: %v\n", str, p.Z.BigInt(new(big.Int)))
 }

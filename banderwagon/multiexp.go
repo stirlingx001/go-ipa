@@ -25,5 +25,10 @@ func (p *Element) MultiExp(points []Element, scalars []fr.Element, config MultiE
 		ScalarsMont: config.ScalarsMont,
 	})
 
+	//_, err := msm.MultiExp(&p.Inner, affinePoints, scalars, bandersnatch.MultiExpConfig{
+	//	NbTasks:     config.NbTasks,
+	//	ScalarsMont: config.ScalarsMont,
+	//})
+
 	return p, err
 }
